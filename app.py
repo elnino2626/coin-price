@@ -23,7 +23,13 @@ def get_spot_price(currency):
             headers=headers
         )
         response.raise_for_status()
-        return jsonify(response.json())
+        data = response.json()
+        
+        # Validate response structure
+        if 'data' not in data or 'amount' not in data['data'] or 'base' not in data['data']:
+            return jsonify({"error": "Invalid response from Coinbase API"}), 500
+        
+        return jsonify(data)
     except requests.exceptions.HTTPError as err:
         return jsonify({"error": str(err)}), 500
     except requests.exceptions.RequestException as err:

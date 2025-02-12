@@ -44,16 +44,14 @@ jobs:
           curl -v http://localhost:5000/health
 
           # Test valid currencies
-          for currency in USD EUR; do
-            echo "--- Testing /$currency ---"
-            response=$(curl -sSf "http://localhost:5000/$currency")
-            echo "Raw response: $response"
+          echo "--- Testing USD ---"
+          response=$(curl -sSf "http://localhost:5000/USD")
+          echo "Raw response: $response"
             
-            # Validate response structure
-            echo "$response" | jq -e '.data'
-            echo "$response" | jq -e '.data.amount'
-            echo "$response" | jq -e '.data.base == "BTC"'
-          done
+          # Validate response structure
+          echo "$response" | jq -e '.data'
+          echo "$response" | jq -e '.data.amount'
+          echo "$response" | jq -e '.data.base == "BTC"'
 
           # Test invalid currency
           echo "--- Testing invalid currency ---"

@@ -43,7 +43,7 @@ jobs:
             echo "Testing valid currency: $currency..."
             response=$(curl -sSf "http://localhost:5000/$currency")
             echo "$response" | jq -e '.data' > /dev/null
-            echo "$response" | jq -e '.data.currency == "'$currency'"' > /dev/null
+            echo "$response" | jq -e '.data.base == "'$currency'"' > /dev/null
           done
 
           # Test invalid currency

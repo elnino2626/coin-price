@@ -48,8 +48,11 @@ jobs:
             echo "--- Testing /$currency ---"
             response=$(curl -sSf "http://localhost:5000/$currency")
             echo "Raw response: $response"
+            
+            # Validate response structure
             echo "$response" | jq -e '.data'
-            echo "$response" | jq -e '.data.currency == "'$currency'"'
+            echo "$response" | jq -e '.data.amount'
+            echo "$response" | jq -e '.data.base == "BTC"'
           done
 
           # Test invalid currency

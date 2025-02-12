@@ -1,11 +1,11 @@
-name: Docker Build
+name: Docker Build and Test
 
 on:
   push:
     branches: [ "main" ]
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,3 +14,46 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t coinbase-webservice .
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq  # JSON parser for validation
+
+      - name: Run container and test endpoints
+        run: |
+          set -e
+          trap 'docker stop webservice' EXIT  # Ensure cleanup on exit
+
+          # Start container in background
+          docker run -d -p 5000:5000 --name webservice coinbase-webservice
+
+          # Wait for service to become healthy
+          echo "Waiting for service to start..."
+          while ! curl -sSf http://localhost:5000/health; do
+            sleep 1
+          done
+
+          # Test /health endpoint
+          echo "Testing health endpoint..."
+          curl -sSf http://localhost:5000/health | jq -e '.status == "ok"' > /dev/null
+
+          # Test valid currencies (USD and EUR)
+          for currency in USD EUR; do
+            echo "Testing valid currency: $currency..."
+            response=$(curl -sSf "http://localhost:5000/$currency")
+            echo "$response" | jq -e '.data' > /dev/null
+            echo "$response" | jq -e '.data.currency == "'$currency'"' > /dev/null
+          done
+
+          # Test invalid currency
+          echo "Testing invalid currency..."
+          status_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/XYZ)
+          if [ "$status_code" -ne 400 ]; then
+            echo "Error: Expected 400 for invalid currency, got $status_code"
+            exit 1
+          fi
+
+          # Validate error message structure
+          response=$(curl -s http://localhost:5000/XYZ)
+          echo "$response" | jq -e '.error | contains("Currency not supported")' > /dev/null

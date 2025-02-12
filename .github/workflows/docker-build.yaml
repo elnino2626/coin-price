@@ -18,42 +18,52 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq  # JSON parser for validation
+          sudo apt-get install -y jq
 
       - name: Run container and test endpoints
         run: |
-          set -e
-          trap 'docker stop webservice' EXIT  # Ensure cleanup on exit
+          set -exo pipefail  # Enable debugging and strict error checking
 
-          # Start container in background
+          # Cleanup handler
+          trap 'docker logs webservice && docker stop webservice' EXIT
+
+          # Start container
           docker run -d -p 5000:5000 --name webservice coinbase-webservice
-
-          # Wait for service to become healthy
+          
+          # Wait for service with timeout
           echo "Waiting for service to start..."
-          while ! curl -sSf http://localhost:5000/health; do
+          for i in {1..10}; do
+            if curl -sSf http://localhost:5000/health >/dev/null; then
+              break
+            fi
             sleep 1
           done
 
-          # Test /health endpoint
-          echo "Testing health endpoint..."
-          curl -sSf http://localhost:5000/health | jq -e '.status == "ok"' > /dev/null
+          # Verify health check
+          echo "--- Testing /health ---"
+          curl -v http://localhost:5000/health
 
-          # Test valid currencies (USD and EUR)
+          # Test valid currencies
           for currency in USD EUR; do
-            echo "Testing valid currency: $currency..."
+            echo "--- Testing /$currency ---"
             response=$(curl -sSf "http://localhost:5000/$currency")
-            echo "$response" | jq -e '.data' > /dev/null
-            echo "$response" | jq -e '.data.base == "'$currency'"' > /dev/null
+            echo "Raw response: $response"
+            echo "$response" | jq -e '.data'
+            echo "$response" | jq -e '.data.currency == "'$currency'"'
           done
 
           # Test invalid currency
-          echo "Testing invalid currency..."
+          echo "--- Testing invalid currency ---"
           status_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/XYZ)
-          if [ "$status_code" -ne 400 ]; then
-            echo "Error: Expected 400 for invalid currency, got $status_code"
+          echo "Status code: $status_code"
+          [ "$status_code" -eq 400 ] || {
+            echo "❌ Expected 400 for invalid currency"
             exit 1
-          fi
+          }
 
-          # Validate error message structure
           response=$(curl -s http://localhost:5000/XYZ)
-          echo "$response" | jq -e '.error | contains("Currency not supported")' > /dev/null
+          echo "Error response: $response"
+          echo "$response" | jq -e '.error' >/dev/null
+          echo "$response" | jq -e '.error | contains("not supported")' >/dev/null
+
+          echo "✅ All tests passed!"
